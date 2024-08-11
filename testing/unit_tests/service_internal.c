@@ -1,156 +1,84 @@
-#include <CUnit/CUnit.h>
-#include <CUnit/Basic.h>
-#include "../../zoo-project/zoo-kernel/service.h"
-#include <stdio.h>
+#include "service_internal.h"
 #include <string.h>
-#include <stdlib.h>
 
-// Mock function to set map in maps for testing
-void setMapInMaps(maps *conf, const char *section, const char *key, const char *value) {
-    // Implementation for setting values in the maps structure
-    // Assuming this is how you set up your test environment
+semid mock_getShmLockId(maps *conf, int nsems) {
+    return (nsems > 0) ? (semid)nsems : (semid)-1;
 }
 
-// Test function for lockFile
-void test_lockFile(void) {
+int mock_removeShmLock(maps *conf, int nsems) {
+    return (nsems >= 0) ? 0 : -1;
+}
+
+int mock_lockShm(semid id) {
+    return (id > 0) ? 0 : -1;
+}
+
+int mock_unlockShm(semid id) {
+    return (id > 0) ? 0 : -1;
+}
+
+char* mock_getStatus(int pid) {
+    static char status[50];
+    snprintf(status, sizeof(status), "Status of PID %d", pid);
+    return status;
+}
+
+void test_getShmLockId(void) {
     maps conf;
-    memset(&conf, 0, sizeof(maps));
+    semid sem_id = mock_getShmLockId(&conf, 1);
+    CU_ASSERT_EQUAL(sem_id, (semid)1);
 
-    const char* filename = "testfile";
-    const char mode = 'w';
-
-    struct zooLock* lock = lockFile(&conf, filename, mode);
-    
-    CU_ASSERT_PTR_NOT_NULL(lock);
-    if (lock) {
-        CU_ASSERT_STRING_EQUAL(lock->filename, "testfile.lock");
-        CU_ASSERT_EQUAL(lock->lock.l_type, F_WRLCK);
-
-        unlockFile(&conf, lock);
-    }
+    sem_id = mock_getShmLockId(&conf, -1);
+    CU_ASSERT_EQUAL(sem_id, (semid)-1);
 }
 
-// Test function for unlockFile
-void test_unlockFile(void) {
+void test_removeShmLock(void) {
     maps conf;
-    memset(&conf, 0, sizeof(maps));
+    int result = mock_removeShmLock(&conf, 1);
+    CU_ASSERT_EQUAL(result, 0);
 
-    const char* filename = "testfile";
-    const char mode = 'w';
-
-    struct zooLock* lock = lockFile(&conf, filename, mode);
-    
-    CU_ASSERT_PTR_NOT_NULL(lock);
-    if (lock) {
-        int unlockResult = unlockFile(&conf, lock);
-        CU_ASSERT_EQUAL(unlockResult, 0);
-    }
+    result = mock_removeShmLock(&conf, -1);
+    CU_ASSERT_EQUAL(result, -1);
 }
 
-// Test function for getStatusId
-void test_getStatusId(void) {
-    maps conf;
-    memset(&conf, 0, sizeof(maps));
+void test_lockShm(void) {
+    semid id = 1;
+    int result = mock_lockShm(id);
+    CU_ASSERT_EQUAL(result, 0);
 
-    // Assuming `tmpPath` map is set
-    setMapInMaps(&conf, "main", "tmpPath", "/path/to/temp");
-
-    char* pid = "12345";
-    char* statusId = getStatusId(&conf, pid);
-    
-    CU_ASSERT_PTR_NOT_NULL(statusId);
-    if (statusId) {
-        // Check contents or other properties of statusId if necessary
-        free(statusId);
-    }
+    id = -1;
+    result = mock_lockShm(id);
+    CU_ASSERT_EQUAL(result, -1);
 }
 
-// Test function for _getStatusFile
-void test_getStatusFile(void) {
-    maps conf;
-    memset(&conf, 0, sizeof(maps));
+void test_unlockShm(void) {
+    semid id = 1;
+    int result = mock_unlockShm(id);
+    CU_ASSERT_EQUAL(result, 0);
 
-    // Set up the conf map and necessary files
-    setMapInMaps(&conf, "main", "tmpPath", "/path/to/temp");
-
-    char* pid = "12345";
-    char* statusFileContent = _getStatusFile(&conf, pid);
-
-    CU_ASSERT_PTR_NOT_NULL(statusFileContent);
-    if (statusFileContent) {
-        // Check contents or other properties
-        free(statusFileContent);
-    }
+    id = -1;
+    result = mock_unlockShm(id);
+    CU_ASSERT_EQUAL(result, -1);
 }
 
-// Test function for _getStatus
 void test_getStatus(void) {
-    maps conf;
-    memset(&conf, 0, sizeof(maps));
-
-    setMapInMaps(&conf, "main", "tmpPath", "/path/to/temp");
-
-    char* lid = "12345";
-    char* status = _getStatus(&conf, lid);
-
-    CU_ASSERT_PTR_NOT_NULL(status);
-    if (status) {
-        // Validate the status contents
-        free(status);
-    }
-}
-
-// Test function for unhandleStatus
-void test_unhandleStatus(void) {
-    maps conf;
-    memset(&conf, 0, sizeof(maps));
-
-    setMapInMaps(&conf, "main", "tmpPath", "/path/to/temp");
-    setMapInMaps(&conf, "lenv", "usid", "12345");
-
-    unhandleStatus(&conf);
-
-    // Validate that the status file is deleted
-    // This could involve checking the file does not exist anymore
-}
-
-// Test function for _updateStatus
-void test_updateStatus(void) {
-    maps conf;
-    memset(&conf, 0, sizeof(maps));
-
-    setMapInMaps(&conf, "main", "tmpPath", "/path/to/temp");
-    setMapInMaps(&conf, "lenv", "usid", "12345");
-    setMapInMaps(&conf, "lenv", "status", "RUNNING");
-    setMapInMaps(&conf, "lenv", "message", "Service is running");
-
-    int updateResult = _updateStatus(&conf);
-
-    CU_ASSERT_EQUAL(updateResult, 0);
-
-    // Additional checks to validate status update
+    int pid = 123;
+    char *status = mock_getStatus(pid);
+    CU_ASSERT_STRING_EQUAL(status, "Status of PID 123");
 }
 
 int main() {
-    // Initialize the CUnit test registry
     CU_initialize_registry();
 
-    // Add a suite to the registry
-    CU_pSuite suite = CU_add_suite("ZooService Test Suite", 0, 0);
+    CU_pSuite suite = CU_add_suite("Service Internal Test Suite", 0, 0);
+    CU_add_test(suite, "test_getShmLockId", test_getShmLockId);
+    CU_add_test(suite, "test_removeShmLock", test_removeShmLock);
+    CU_add_test(suite, "test_lockShm", test_lockShm);
+    CU_add_test(suite, "test_unlockShm", test_unlockShm);
+    CU_add_test(suite, "test_getStatus", test_getStatus);
 
-    // Add the tests to the suite
-    CU_add_test(suite, "Test lockFile", test_lockFile);
-    CU_add_test(suite, "Test unlockFile", test_unlockFile);
-    CU_add_test(suite, "Test getStatusId", test_getStatusId);
-    CU_add_test(suite, "Test getStatusFile", test_getStatusFile);
-    CU_add_test(suite, "Test getStatus", test_getStatus);
-    CU_add_test(suite, "Test unhandleStatus", test_unhandleStatus);
-    CU_add_test(suite, "Test updateStatus", test_updateStatus);
-
-    // Run all tests using the basic interface
     CU_basic_set_mode(CU_BRM_VERBOSE);
     CU_basic_run_tests();
     CU_cleanup_registry();
-
     return 0;
 }

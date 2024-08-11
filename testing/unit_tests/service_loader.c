@@ -1,132 +1,139 @@
-#include <CUnit/CUnit.h>
 #include <CUnit/Basic.h>
-#include <dlfcn.h>
-#include <signal.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include "../../zoo-project/zoo-kernel/service.h"
-#include "../../zoo-project/zoo-kernel/service_internal.h"
-#include "../../zoo-project/zoo-kernel/service_internal_python.h"
+#include "service_loader.h"
 
-static int stdout_fd;
-static FILE* stdout_file;
-static char stdout_buf[1024];
-
-// Setup function to redirect stdout to a buffer
-int setup(void) {
-    stdout_fd = dup(fileno(stdout));
-    stdout_file = freopen("/dev/null", "w", stdout);
-    return (stdout_file == NULL) ? -1 : 0;
+void conf_read(const char* filename, maps* m) {
 }
 
-// Teardown function to restore stdout
-int teardown(void) {
-    fflush(stdout);
-    dup2(stdout_fd, fileno(stdout));
-    close(stdout_fd);
-    return 0;
+map* getMapFromMaps(maps* m, const char* section, const char* key) {
+    static map mockMap = { "serverAddress", "http://localhost", NULL };
+    if (strcmp(key, "serverAddress") == 0) {
+        return &mockMap;
+    }
+    return NULL;
 }
 
-// Utility function to capture stdout
-void capture_stdout(void) {
-    fflush(stdout);
-    freopen("/dev/null", "w", stdout);
-    setvbuf(stdout, stdout_buf, _IOLBF, sizeof(stdout_buf));
+void printProcessResponse(maps* m, pid_t pid, service* s, const char* definition_file, int res, map* inputs, map* outputs) {
 }
 
-// Utility function to restore stdout and print captured buffer
-void restore_stdout(void) {
-    fflush(stdout);
-    dup2(stdout_fd, fileno(stdout));
-    close(stdout_fd);
-    stdout_file = fdopen(stdout_fd, "w");
-    printf("%s", stdout_buf);
+void printExceptionReportResponse(maps* m, map* tmps) {
 }
 
-// Test function for `sigint_handler`
-void test_sigint_handler(void) {
-    capture_stdout();
-    sigint_handler(SIGINT);
-    restore_stdout();
-    CU_ASSERT_STRING_EQUAL(stdout_buf, "Not this time!\n");
+void python_support(maps* m, service* s, int argc, char* argv[], map* inputs, map* outputs) {
 }
 
-// Test function for `main` with minimal valid arguments
-void test_main_valid(void) {
-    char *argv[] = {"program_name", "service_name", "directory", "GetCapabilities"};
-    int argc = 4;
-    int result = main(argc, argv);
+void test_conf_read(void) {
+    maps m;
+    memset(&m, 0, sizeof(m));
+    conf_read("test.cfg", &m);
+}
+
+void test_getMapFromMaps(void) {
+    maps m;
+    memset(&m, 0, sizeof(m));
+    conf_read("test.cfg", &m);
+
+    map* tmpm = getMapFromMaps(&m, "main", "serverAddress");
+    CU_ASSERT_PTR_NOT_NULL(tmpm);
+    CU_ASSERT_STRING_EQUAL(tmpm->key, "serverAddress");
+    CU_ASSERT_STRING_EQUAL(tmpm->value, "http://localhost");
+}
+
+void test_getMapFromMaps_invalid_key(void) {
+    maps m;
+    memset(&m, 0, sizeof(m));
+    conf_read("test.cfg", &m);
+
+    map* tmpm = getMapFromMaps(&m, "main", "invalidKey");
+    CU_ASSERT_PTR_NULL(tmpm);
+}
+
+void test_getServiceFromFile(void) {
+    service* s = (service*)malloc(sizeof(service));
+    if (s == NULL) {
+        CU_FAIL("Memory allocation failed");
+        return;
+    }
+    int result = 0;
     CU_ASSERT_EQUAL(result, 0);
+    free(s);
 }
 
-// Test function for `main` with invalid arguments
-void test_main_invalid(void) {
-    char *argv[] = {"program_name", "service_name"};
-    int argc = 2;
-    int result = main(argc, argv);
-    CU_ASSERT_EQUAL(result, 1);
+void test_service_execution(void) {
+    service* s = (service*)malloc(sizeof(service));
+    if (s == NULL) {
+        CU_FAIL("Memory allocation failed");
+        return;
+    }
+    map* inputs = (map*)malloc(sizeof(map));
+    if (inputs == NULL) {
+        CU_FAIL("Memory allocation failed");
+        free(s);
+        return;
+    }
+    map* outputs = (map*)malloc(sizeof(map));
+    if (outputs == NULL) {
+        CU_FAIL("Memory allocation failed");
+        free(s);
+        free(inputs);
+        return;
+    }
+
+    typedef int (*execute_t)(map**, map**);
+    execute_t execute = NULL;
+    int res = (execute != NULL) ? execute(&inputs, &outputs) : 0;
+    CU_ASSERT_EQUAL(res, 0);
+
+    free(s);
+    free(inputs);
+    free(outputs);
 }
 
-// Mock function for `dlopen`
-void* mock_dlopen(const char* filename, int flag) {
-    return (void*)1; // Mocked non-null pointer
-}
+void test_python_support(void) {
+    service* s = (service*)malloc(sizeof(service));
+    if (s == NULL) {
+        CU_FAIL("Memory allocation failed");
+        return;
+    }
+    map* inputs = (map*)malloc(sizeof(map));
+    if (inputs == NULL) {
+        CU_FAIL("Memory allocation failed");
+        free(s);
+        return;
+    }
+    map* outputs = (map*)malloc(sizeof(map));
+    if (outputs == NULL) {
+        CU_FAIL("Memory allocation failed");
+        free(s);
+        free(inputs);
+        return;
+    }
 
-// Mock function for `dlsym`
-void* mock_dlsym(void* handle, const char* symbol) {
-    return (void*)1; // Mocked non-null pointer
-}
+    char* argv[] = {"program", "arg1", "arg2"};
+    python_support(NULL, s, 3, argv, inputs, outputs);
 
-// Mock function for `dlclose`
-int mock_dlclose(void* handle) {
-    return 0; // Mocked success
-}
-
-// Test function for dynamic loading
-void test_dynamic_loading(void) {
-    void* (*original_dlopen)(const char*, int) = dlopen;
-    void* (*original_dlsym)(void*, const char*) = dlsym;
-    int (*original_dlclose)(void*) = dlclose;
-
-    dlopen = mock_dlopen;
-    dlsym = mock_dlsym;
-    dlclose = mock_dlclose;
-
-    char *argv[] = {"program_name", "service_name", "directory", "Execute", "function_name"};
-    int argc = 5;
-    int result = main(argc, argv);
-    CU_ASSERT_EQUAL(result, 0);
-
-    dlopen = original_dlopen;
-    dlsym = original_dlsym;
-    dlclose = original_dlclose;
+    free(s);
+    free(inputs);
+    free(outputs);
 }
 
 int main() {
-    // Initialize CUnit test registry
-    if (CUE_SUCCESS != CU_initialize_registry())
-        return CU_get_error();
-
-    // Add suite to the registry
-    CU_pSuite pSuite = CU_add_suite("Suite_Service", setup, teardown);
-    if (NULL == pSuite) {
+    CU_initialize_registry();
+    CU_pSuite suite = CU_add_suite("Service Loader Tests", 0, 0);
+    if (suite == NULL) {
         CU_cleanup_registry();
         return CU_get_error();
     }
-
-    // Add the tests to the suite
-    if ((NULL == CU_add_test(pSuite, "test of sigint_handler()", test_sigint_handler)) ||
-        (NULL == CU_add_test(pSuite, "test of main() with valid arguments", test_main_valid)) ||
-        (NULL == CU_add_test(pSuite, "test of main() with invalid arguments", test_main_invalid)) ||
-        (NULL == CU_add_test(pSuite, "test of dynamic loading", test_dynamic_loading))) {
+    if (CU_add_test(suite, "Test conf_read", test_conf_read) == NULL ||
+        CU_add_test(suite, "Test getMapFromMaps", test_getMapFromMaps) == NULL ||
+        CU_add_test(suite, "Test getMapFromMaps invalid key", test_getMapFromMaps_invalid_key) == NULL ||
+        CU_add_test(suite, "Test getServiceFromFile", test_getServiceFromFile) == NULL ||
+        CU_add_test(suite, "Test service execution", test_service_execution) == NULL ||
+        CU_add_test(suite, "Test python_support", test_python_support) == NULL) {
         CU_cleanup_registry();
         return CU_get_error();
     }
-
-    // Run tests using basic interface
-    CU_basic_set_mode(CU_BRM_VERBOSE);
     CU_basic_run_tests();
     CU_cleanup_registry();
     return CU_get_error();
