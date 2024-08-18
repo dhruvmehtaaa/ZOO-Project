@@ -34,7 +34,9 @@ sudo apt install -y \
     libgdal-dev \
     libyaml-dev \
     python3.12-dev \
-    libxml2-dev
+    libxml2-dev \
+    libperl-dev \
+    libr-dev
 ```
 
 ## After Installing run the below commands to execute the tests
