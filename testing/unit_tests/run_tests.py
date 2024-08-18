@@ -29,5 +29,8 @@ run_test("service_internal_tests", "gcc -o service_internal_tests service_intern
 run_test("request_parser_test", "gcc -o request_parser_test request_parser.c map_functions.c -lcunit")
 run_test("response_print_test", "gcc -o response_print_test response_print.c -lcunit -lxml2 -I/usr/include/libxml2")
 run_test("meta_sql", "gcc -o meta_sql meta_sql.c -lcunit")
+run_test("test_service_internal_perl", "gcc -o test_service_internal_perl service_internal_perl.c -lcunit $(perl -MExtUtils::Embed -e ccopts) $(perl -MExtUtils::Embed -e ldopts)")
+run_test("test_service_internal_java", "gcc -o test_service_internal_java service_internal_java.c -lcunit")
+run_test("test_service_internal_r", "gcc -o test_service_internal_r service_internal_r.c -I/usr/share/R/include -lcunit")
 
 print("All tests executed successfully!")
